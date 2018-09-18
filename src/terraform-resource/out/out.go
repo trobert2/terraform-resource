@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 
+	"terraform-resource/authentication"
 	"terraform-resource/logger"
 	"terraform-resource/models"
 	"terraform-resource/namer"
@@ -37,6 +38,34 @@ func (r Runner) Run(req models.OutRequest) (models.OutResponse, error) {
 		return models.OutResponse{}, fmt.Errorf("Failed to create tmp dir at '%s'", os.TempDir())
 	}
 	defer os.RemoveAll(tmpDir)
+
+	// TODO: instead of copying this to "out", "check" and "in", abstract it and make it available to call.
+	vaultAuthConfigModel := req.Source.VaultConfiguration
+	if vaultAuthConfigModel != (authentication.VaultConfiguration{}) {
+		if err := vaultAuthConfigModel.Validate(); err != nil {
+			return models.OutResponse{}, fmt.Errorf("Failed to validate vault Config Model: %s", err)
+		}
+
+		credentials, err := authentication.GetAwsCredentials(&vaultAuthConfigModel)
+		if err != nil {
+			return models.OutResponse{}, fmt.Errorf("Failed to grab AWS credentials from Vault: %s", err)
+		}
+
+		// Set the fetched credentials to be used in the storage driver
+		req.Source.Storage.AccessKeyID = credentials.AccessKeyID
+		req.Source.Storage.SecretAccessKey = credentials.SecretAccessKey
+		req.Source.Storage.SessionToken = credentials.SessionToken
+
+		// Set the fetched credentials to be used in the terraform environment
+		req.Source.Terraform.Env["AWS_ACCESS_KEY_ID"] = credentials.AccessKeyID
+		req.Source.Terraform.Env["TF_VAR_access_key"] = credentials.SessionToken
+		req.Source.Terraform.Env["AWS_SECRET_ACCESS_KEY"] = credentials.SecretAccessKey
+		req.Source.Terraform.Env["TF_VAR_secret_key"] = credentials.SessionToken
+		if len(credentials.SessionToken) > 0 {
+			req.Source.Terraform.Env["AWS_SESSION_TOKEN"] = credentials.SessionToken
+			req.Source.Terraform.Env["TF_VAR_session_token"] = credentials.SessionToken
+		}
+	}
 
 	storageModel := req.Source.Storage
 	if err = storageModel.Validate(); err != nil {
@@ -98,6 +127,9 @@ func (r Runner) Run(req models.OutRequest) (models.OutResponse, error) {
 		}
 	}
 
+	// TODO: Here is where the model gets passed to the client.
+	//		 The ENV vars for AWS need to be here if we want them added to the env that the binary is ran in
+	//		 We need to attack it just like the terraformModel.Vars example above.
 	client := terraform.Client{
 		Model:         terraformModel,
 		StorageDriver: storageDriver,

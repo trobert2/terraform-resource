@@ -18,6 +18,7 @@ type Model struct {
 	BucketPath           string `json:"bucket_path"`
 	AccessKeyID          string `json:"access_key_id"`
 	SecretAccessKey      string `json:"secret_access_key"`
+	SessionToken         string `json:"session_token"`                    // optional
 	RegionName           string `json:"region_name,omitempty"`            // optional
 	Endpoint             string `json:"endpoint,omitempty"`               // optional
 	UseSigningV2         bool   `json:"use_signing_v2,omitempty"`         // optional
@@ -65,6 +66,7 @@ func (m Model) Validate() error {
 		if m.BucketPath == "" {
 			missingFields = append(missingFields, fmt.Sprintf("%s.bucket_path", fieldPrefix))
 		}
+		//TODO: Check here: if missing key and secret AND flag I set is "false"
 		if m.AccessKeyID == "" {
 			missingFields = append(missingFields, fmt.Sprintf("%s.access_key_id", fieldPrefix))
 		}

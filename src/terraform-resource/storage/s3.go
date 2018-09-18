@@ -27,7 +27,13 @@ const (
 
 func NewS3(m Model) Storage {
 
-	creds := credentials.NewStaticCredentials(m.AccessKeyID, m.SecretAccessKey, "")
+	// TODO: Add here the token as well
+	token := ""
+	if len(m.SessionToken) > 0 {
+		token = m.SessionToken
+	}
+
+	creds := credentials.NewStaticCredentials(m.AccessKeyID, m.SecretAccessKey, token)
 
 	regionName := m.RegionName
 	if len(regionName) == 0 {

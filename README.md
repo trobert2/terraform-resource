@@ -9,6 +9,16 @@ See [DEVELOPMENT](DEVELOPMENT.md) if you're interested in submitting a PR :+1:
 
 ## Source Configuration
 
+> **Note:** If the vault section is going to be used it will override the config credentials in the storage configuration and terraform execution environmnet.
+
+* `vault.address`: *Optional* The address where vault can be reached.
+
+* `vault.secret_path`: *Optional* The `sts` role path where the write commands needs to be executed.
+
+* `vault.token`: *Optional* The vault token to be used for authentitaion to vault.
+
+* `vault.ttl`: *Optional* The time to leave for the write command.
+
 > **Note:** If you need to store Terraform state file in a service other than S3, try the [backend-beta image](https://github.com/ljfranklin/terraform-resource/tree/WIP-tf-backends#backend-beta).
 
 * `storage.driver`: *Optional. Default `s3`.* The driver used to store the Terraform state file. Currently `s3` is the only supported driver.

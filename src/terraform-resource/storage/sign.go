@@ -134,6 +134,7 @@ func (v2 *signer) Sign() error {
 		return err
 	}
 	accessKey := credValue.AccessKeyID
+
 	var (
 		md5, ctype, date, xamz string
 		xamzDate               bool
@@ -182,6 +183,10 @@ func (v2 *signer) Sign() error {
 		expires = true
 		date = v[0]
 		params["AWSAccessKeyId"] = []string{accessKey}
+		// maybe FIXME: If it doesn't work, look here
+		if len(credValue.SessionToken) > 0 {
+			params["SecurityToken"] = []string{credValue.SessionToken}
+		}
 	}
 
 	sarray = sarray[0:0]

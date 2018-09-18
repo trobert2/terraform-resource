@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 
+	"terraform-resource/authentication"
 	"terraform-resource/encoder"
 	"terraform-resource/models"
 	"terraform-resource/storage"
@@ -39,6 +40,25 @@ func (r Runner) Run(req models.InRequest) (models.InResponse, error) {
 		return models.InResponse{}, fmt.Errorf("Failed to create tmp dir at '%s'", os.TempDir())
 	}
 	defer os.RemoveAll(tmpDir)
+
+	// TODO: instead of copying this to "out", "check" and "in", abstract it and make it available to call.
+	vaultAuthConfigModel := req.Source.VaultConfiguration
+	credentials := authentication.AwsCredentials{}
+	if vaultAuthConfigModel != (authentication.VaultConfiguration{}) {
+		if err := vaultAuthConfigModel.Validate(); err != nil {
+			return models.InResponse{}, fmt.Errorf("Failed to validate vault Config Model: %s", err)
+		}
+
+		credentials, err = authentication.GetAwsCredentials(&vaultAuthConfigModel)
+		if err != nil {
+			return models.InResponse{}, fmt.Errorf("Failed to grab AWS credentials from Vault: %s", err)
+		}
+
+		// Set the fetched credentials to be used in the storage driver
+		req.Source.Storage.AccessKeyID = credentials.AccessKeyID
+		req.Source.Storage.SecretAccessKey = credentials.SecretAccessKey
+		req.Source.Storage.SessionToken = credentials.SessionToken
+	}
 
 	storageModel := req.Source.Storage
 	if err = storageModel.Validate(); err != nil {
@@ -82,6 +102,18 @@ func (r Runner) Run(req models.InRequest) (models.InResponse, error) {
 	terraformModel := models.Terraform{
 		StateFileLocalPath:  stateFile.LocalPath,
 		StateFileRemotePath: stateFile.RemotePath,
+	}
+
+	if credentials != (authentication.AwsCredentials{}) {
+		// Set the fetched credentials to be used in the terraform environment
+		terraformModel.Env["AWS_ACCESS_KEY_ID"] = credentials.AccessKeyID
+		terraformModel.Env["TF_VAR_access_key"] = credentials.SessionToken
+		terraformModel.Env["AWS_SECRET_ACCESS_KEY"] = credentials.SecretAccessKey
+		terraformModel.Env["TF_VAR_secret_key"] = credentials.SessionToken
+		if len(credentials.SessionToken) > 0 {
+			terraformModel.Env["AWS_SESSION_TOKEN"] = credentials.SessionToken
+			terraformModel.Env["TF_VAR_session_token"] = credentials.SessionToken
+		}
 	}
 
 	if req.Params.OutputModule != "" {
