@@ -57,13 +57,26 @@ func (r Runner) Run(req models.OutRequest) (models.OutResponse, error) {
 		req.Source.Storage.SessionToken = credentials.SessionToken
 
 		// Set the fetched credentials to be used in the terraform environment
-		req.Source.Terraform.Env["AWS_ACCESS_KEY_ID"] = credentials.AccessKeyID
-		req.Source.Terraform.Env["TF_VAR_access_key"] = credentials.SessionToken
-		req.Source.Terraform.Env["AWS_SECRET_ACCESS_KEY"] = credentials.SecretAccessKey
-		req.Source.Terraform.Env["TF_VAR_secret_key"] = credentials.SessionToken
+		envMap := make(map[string]string)
+
+		envMap["AWS_ACCESS_KEY_ID"] = credentials.AccessKeyID
+		envMap["TF_VAR_access_key"] = credentials.SessionToken
+		envMap["AWS_SECRET_ACCESS_KEY"] = credentials.SecretAccessKey
+		envMap["TF_VAR_secret_key"] = credentials.SessionToken
 		if len(credentials.SessionToken) > 0 {
-			req.Source.Terraform.Env["AWS_SESSION_TOKEN"] = credentials.SessionToken
-			req.Source.Terraform.Env["TF_VAR_session_token"] = credentials.SessionToken
+			envMap["AWS_SESSION_TOKEN"] = credentials.SessionToken
+			envMap["TF_VAR_session_token"] = credentials.SessionToken
+		}
+
+		// Add the values to the Terraform Env
+		if req.Source.Terraform.Env == nil {
+			// No vaules were provided in the source. We directly add our map
+			req.Source.Terraform.Env = envMap
+		} else {
+			// There are already Env values coming from source. We merge the maps
+			for k, v := range envMap {
+				req.Source.Terraform.Env[k] = v
+			}
 		}
 	}
 
