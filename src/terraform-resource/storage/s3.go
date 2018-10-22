@@ -3,9 +3,12 @@ package storage
 import (
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"path"
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -90,6 +93,38 @@ func (s *s3) Download(filename string, destination io.Writer) (Version, error) {
 
 func (s *s3) Upload(filename string, content io.Reader) (Version, error) {
 
+	checkInput := &awss3.HeadBucketInput{
+		Bucket: aws.String(s.model.Bucket),
+	}
+
+	_, err := s.client.HeadBucket(checkInput)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			code := aerr.Code()
+
+			if code == awss3.ErrCodeNoSuchBucket || strings.Contains(code, "NotFound") {
+				l := log.New(os.Stderr, "", 0)
+				l.Println(fmt.Sprintf("Bucket does not exist. Creating with name \"%s\"", s.model.Bucket))
+
+				createInput := &awss3.CreateBucketInput{
+					Bucket: aws.String(s.model.Bucket),
+					CreateBucketConfiguration: &awss3.CreateBucketConfiguration{
+						LocationConstraint: aws.String(s.model.RegionName),
+					},
+				}
+				_, err := s.client.CreateBucket(createInput)
+				if err != nil {
+					return Version{}, fmt.Errorf("Failed to create S3 bucket: %s", err.Error())
+				}
+
+			} else {
+				return Version{}, fmt.Errorf("Failed to access S3 bucket: %s", aerr.Error())
+			}
+		} else {
+			return Version{}, fmt.Errorf("Failed to access S3 bucket: %s", aerr.Error())
+		}
+	}
+
 	uploader := s3manager.NewUploaderWithClient(s.client)
 
 	key := path.Join(s.model.BucketPath, filename)
@@ -106,7 +141,7 @@ func (s *s3) Upload(filename string, content io.Reader) (Version, error) {
 		uploadInput.SSEKMSKeyId = aws.String(s.model.SSEKMSKeyId)
 	}
 
-	_, err := uploader.Upload(uploadInput)
+	_, err = uploader.Upload(uploadInput)
 	if err != nil {
 		return Version{}, fmt.Errorf("Failed to Upload to S3: %s", err.Error())
 	}
